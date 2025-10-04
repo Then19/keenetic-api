@@ -1,6 +1,8 @@
 import httpx
 import hashlib
 from src.config import config
+from src.service.keenetic.exceptions import MacNotFound, PolicyNotFound
+from src.service.keenetic.schemas import PolicyInfo
 
 
 class KeeneticController:
@@ -32,5 +34,20 @@ class KeeneticController:
     async def change_device_policy(self, mac_address, policy_name):
         await self.keenetic_auth()
         await self._client.post(f"{self.RCI_URL}/ip/hotspot/host", json={"mac": mac_address, "policy": policy_name, 'permit': True})
+        await self._client.post(f"{self.RCI_URL}/system/configuration/save",json={})
+
+    async def get_device_policy(self, mac_address: str) -> PolicyInfo:
+        await self.keenetic_auth()
+
+        mac_address = mac_address.lower()
+        policy_data = (await self._client.get(f"{self.RCI_URL}/show/sc/ip/hotspot/host")).json()
+        for info in policy_data:
+            if info["mac"] == mac_address:
+                policy = info.get("policy")
+                if policy:
+                    return PolicyInfo(mac=mac_address, policy=policy)
+                raise PolicyNotFound()
+        raise MacNotFound()
+
 
 keenetic_controller_client = KeeneticController()
